@@ -230,8 +230,9 @@ describe ActiveOperation::Pipeline do
       expect { described_class.compose { use ->(a = 1) {} } }.to raise_error(ArgumentError)
     end
 
-    it "does not support optional keyword arguments as Ruby's reflection mechanism does not support accessing the default value which is required to setup the operation inputs correctly" do
-      expect { described_class.compose { use ->(a: 1) {} } }.to raise_error(ArgumentError)
+    it "supports optional keyword arguments" do
+      pipeline = described_class.compose { use ->(a: 1) { a } }
+      expect(pipeline.call(a: 2)).to eq(2)
     end
   end
 end
