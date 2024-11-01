@@ -16,8 +16,8 @@ class ActiveOperation::Base
   define_callbacks :halted, scope: [:name]
 
   class << self
-    def perform(*args)
-      new(*args).call
+    def perform(...)
+      new(...).call
     end
 
     def from_proc(execute)
@@ -30,8 +30,8 @@ class ActiveOperation::Base
           when :req
             input name, type: :positional, required: true
             positional_arguments << name
-          when :keyreq
-            input name, type: :keyword, required: true
+          when :keyreq, :key
+            input name, type: :keyword, required: (type == :keyreq)
             keyword_arguments << name
           else
             raise ArgumentError, "Argument type not supported: #{type}"
@@ -51,8 +51,8 @@ class ActiveOperation::Base
       end
     end
 
-    def call(*args)
-      perform(*args)
+    def call(...)
+      perform(...)
     end
 
     def inputs
@@ -60,8 +60,8 @@ class ActiveOperation::Base
     end
 
     def to_proc
-      ->(*args) {
-        perform(*args)
+      ->(*args, **kwargs) {
+        perform(*args, **kwargs)
       }
     end
 
@@ -130,7 +130,11 @@ class ActiveOperation::Base
   def initialize(*args)
     arity = self.class.inputs.count(&:positional?)
     arguments = args.shift(arity)
-    attributes = args.last.kind_of?(Hash) ? args.pop : {}
+    attributes = if args.last.is_a?(Hash)
+                  args.pop.transform_keys(&:to_sym)
+                else
+                  {}
+                end
 
     raise ArgumentError, "wrong number of arguments #{arguments.length + args.length} for #{arity}" unless args.empty?
 
@@ -138,7 +142,7 @@ class ActiveOperation::Base
       attributes[input.name] = arguments[index]
     end
 
-    super(attributes)
+    super(**attributes)
   end
 
   def perform
