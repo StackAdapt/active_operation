@@ -149,8 +149,15 @@ class ActiveOperation::Base
     run_callbacks :execute do
       catch(:abort) do
         next if completed?
-        @output = execute
-        self.state = :succeeded
+        @in_execute = true
+        begin
+          @output = execute
+          self.state = :succeeded
+        rescue ActiveOperation::Halted, ActiveOperation::Succeeded
+          # state and @output already set by #halt / #succeed
+        ensure
+          @in_execute = false
+        end
       end
     end
 
@@ -197,7 +204,11 @@ class ActiveOperation::Base
 
     self.state = :halted
     @output = args.length > 1 ? args : args.first
-    throw :abort
+    # Inside #execute, raise so we propagate cleanly through any enclosing
+    # ActiveRecord transaction (which will roll back). Outside #execute
+    # (i.e. from before/after callbacks), keep using `throw :abort` so
+    # ActiveSupport's callback chain halts and after-callbacks still run.
+    @in_execute ? raise(ActiveOperation::Halted) : throw(:abort)
   end
 
   def succeed(*args)
@@ -205,6 +216,6 @@ class ActiveOperation::Base
 
     self.state = :succeeded
     @output = args.length > 1 ? args : args.first
-    throw :abort
+    @in_execute ? raise(ActiveOperation::Succeeded) : throw(:abort)
   end
 end
